@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Env / secrets
+.env
+.env.local
+*.pem
+credentials.json
+service-account*.json
+
+# Data & artifacts (large / local)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+checkpoints/*
+!checkpoints/.gitkeep
+runs/
+wandb/
+mlruns/
+outputs/
+*.ckpt
+*.pt
+*.pth
+*.h5
+*.onnx
+*.bin
+*.safetensors
+
+# Notebooks
+.ipynb_checkpoints/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Colab / Drive noise
+drive/
+sample_data/

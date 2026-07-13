@@ -1,0 +1,32 @@
+schema: spec-driven
+
+context: |
+  Proyecto: shannon_model — entrenamiento de modelo ML reproducible (local + Google Colab)
+  Remote: git@github.com:isaacgrimaldovo/shannon_model.git
+  Stack: Python >=3.10, PyTorch, YAML (configs/), package en src/shannon_model/
+  Entrypoint: python scripts/train.py --config configs/default.yaml
+  Colab: notebooks/colab_train.ipynb (clona repo, instala deps, llama al mismo entrypoint)
+  Estado actual: datos sintéticos + MLP baseline (ShannonBaseline) para validar Colab + Git
+  Idioma equipo: español en docs/specs/OpenSpec; código de aplicación en inglés
+  Colaboración: ramas feature/experiment, PR a main, sin datos/checkpoints/.env en git
+  Convenciones: hiperparámetros en configs/*.yaml; notebooks solo orquestan
+  Pendientes conocidos: dataset real, arquitectura final, experiment tracking (W&B opcional)
+  Docs: docs/COLABORACION.md, README.md
+  Doc-first: consultar docs oficiales (PyTorch, OpenSpec) antes de configurar o implementar
+
+rules:
+  proposal:
+    - Escribir en español
+    - Incluir sección "Fuera de alcance" / Non-goals
+    - Separar claramente pipeline bootstrap vs trabajo de modelo/datos
+  specs:
+    - Requisitos con SHALL/MUST y escenarios Given/When/Then
+    - Comportamiento observable, no detalles de implementación
+    - Specs en español
+  design:
+    - Escribir en español
+    - Preferir reutilizar scripts/train.py y configs YAML
+    - No romper el flujo Colab existente sin necesidad
+  tasks:
+    - Tareas pequeñas y verificables
+    - Marcar qué requiere cambios de código vs solo docs/specs
