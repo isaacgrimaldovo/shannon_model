@@ -1,0 +1,29 @@
+data:
+  structured_path: data/processed/notes_structured.parquet
+  csv_urls_dir: data/raw/csv_urls
+
+target_kind: views_7d
+
+scopes:
+  - all
+  - nacional
+  - espectaculos
+  - economia
+  - mundo
+  - estilo-de-vida
+  - tendencias
+
+recipe:
+  min_notes: 30
+  top_quantile: 0.25
+  match_threshold: 0.7
+  prevalence_threshold: 0.6
+  hour_window: 1
+
+# compliance_period:
+#   start: "2026-07-07"
+#   end: "2026-07-14"
+compliance_period: null
+
+output:
+  dir: checkpoints/editorial_opportunities

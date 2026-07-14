@@ -1,0 +1,26 @@
+seed: 42
+
+data:
+  structured_path: data/processed/notes_structured.parquet
+  csv_urls_dir: data/raw/csv_urls
+
+cv:
+  n_splits: 5
+  # Cada combinación se evalúa con el mismo esquema de 5-fold fold-safe; se elige la de mejor r2_mean.
+  param_grid:
+    - {n_estimators: 200, max_depth: 8, min_samples_leaf: 5}
+    - {n_estimators: 300, max_depth: 10, min_samples_leaf: 3}
+    - {n_estimators: 200, max_depth: 12, min_samples_leaf: 5}
+    - {n_estimators: 400, max_depth: null, min_samples_leaf: 2}
+    - {n_estimators: 300, max_depth: 6, min_samples_leaf: 10}
+
+# Modelo B (content-only-impact-model): solo features accionables, sin autor/canal.
+# Dataset a nivel nota (más chico que nota×source) — grid más conservador para no sobreajustar.
+content_model:
+  param_grid:
+    - {n_estimators: 200, max_depth: 5, min_samples_leaf: 10}
+    - {n_estimators: 200, max_depth: 8, min_samples_leaf: 5}
+    - {n_estimators: 300, max_depth: 4, min_samples_leaf: 15}
+
+output:
+  dir: checkpoints/views_impact
