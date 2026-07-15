@@ -78,6 +78,29 @@ def load_url_folder_map(urls_xlsx: Path) -> dict[str, str]:
     return dict(zip(df["url"], df["folder"]))
 
 
+def load_url_folder_map_from_csv_urls(csv_urls_dir: Path) -> dict[str, str]:
+    """Deriva `url -> folder` desde `data/raw/csv_urls/` (mismo esquema que el xlsx viejo,
+    pero con más URLs y categorías). Excluye los mismos archivos "raros" que
+    `impact_model.dataset._load_daily_views` (formato viejo / duplicado del proxy)."""
+    csv_dir = Path(csv_urls_dir)
+    files = [
+        f for f in csv_dir.glob("*.csv") if "report" not in f.name and f.name != "ehm-90-google-economia.csv"
+    ]
+    frames = [pd.read_csv(f, usecols=["url", "folder"]) for f in files]
+    df = pd.concat(frames, ignore_index=True).dropna(subset=["url"])
+    df["folder"] = df["folder"].str.strip("/")
+
+    dedup = df.drop_duplicates(subset=["url", "folder"])
+    counts = dedup.groupby("url").size()
+    conflicts = counts[counts > 1]
+    if not conflicts.empty:
+        conflicting_url = conflicts.index[0]
+        values = sorted(dedup.loc[dedup["url"] == conflicting_url, "folder"])
+        raise ValueError(f"folder inconsistente para url={conflicting_url!r}: {values}")
+
+    return dict(zip(dedup["url"], dedup["folder"]))
+
+
 def load_structured(path: Path) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame(columns=STRUCTURED_COLUMNS)
@@ -145,8 +168,15 @@ def _fetch_and_extract(
     }
 
 
+def _load_url_folder_map(urls_source: Path) -> dict[str, str]:
+    """`urls_source` puede ser un directorio (`csv_urls`, default) o un archivo xlsx (compatibilidad)."""
+    if urls_source.is_dir():
+        return load_url_folder_map_from_csv_urls(urls_source)
+    return load_url_folder_map(urls_source)
+
+
 def run_scrape(config: ScrapeConfig) -> dict[str, int]:
-    url_folder = load_url_folder_map(config.urls_xlsx)
+    url_folder = _load_url_folder_map(config.urls_xlsx)
     all_urls = list(url_folder.keys())
 
     index_df = load_index(config.index_path)
@@ -234,7 +264,7 @@ def reprocess_existing(config: ScrapeConfig) -> dict[str, int]:
     Correr solo cuando no haya un scrape en curso escribiendo los mismos archivos
     (índice y dataset estructurado no tienen locking entre procesos).
     """
-    url_folder = load_url_folder_map(config.urls_xlsx)
+    url_folder = _load_url_folder_map(config.urls_xlsx)
     index_df = load_index(config.index_path)
     structured_df = load_structured(config.structured_path)
 

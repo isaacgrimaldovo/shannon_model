@@ -19,7 +19,11 @@ from shannon_model.scraping.pipeline import (  # noqa: E402
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Scrapear notas de heraldodemexico.com.mx")
-    parser.add_argument("--urls-xlsx", default="data/raw/ehm_3months_filtered.xlsx")
+    parser.add_argument(
+        "--urls-xlsx",
+        default="data/raw/csv_urls",
+        help="Directorio con los CSVs de URLs (default) o, por compatibilidad, un archivo xlsx del formato viejo",
+    )
     parser.add_argument("--html-dir", default="data/raw/html")
     parser.add_argument("--index-path", default="data/raw/scrape_index.csv")
     parser.add_argument("--structured-path", default="data/processed/notes_structured.parquet")
