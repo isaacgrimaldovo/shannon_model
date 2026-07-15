@@ -26,21 +26,30 @@ python scripts/train.py --config configs/default.yaml
 
 ## Google Colab (equipo)
 
-1. Este repo vive en GitHub: `isaacgrimaldovo/shannon_model`.
-2. Abre `notebooks/colab_train.ipynb` en Colab (File > Upload notebook, o desde GitHub).
-3. En Colab: Runtime > Change runtime type > GPU (recomendado).
-4. Ejecuta las celdas en orden: clonar repo, instalar deps, entrenar.
-5. Los checkpoints se guardan en `checkpoints/` (o en Drive si activas esa celda).
+Guia completa (clone, Drive, **extract/scrape**, train de vistas, receta editorial):
+
+**→ [`docs/COLAB.md`](docs/COLAB.md)**
+
+Resumen:
+
+1. Repo en GitHub: `isaacgrimaldovo/shannon_model`.
+2. Runtime → GPU. Clonar en `/content` + `pip install -r requirements.txt`.
+3. Copiar datos desde Drive a `data/raw/` y `data/processed/` (ver guía).
+4. Extract: `python scripts/scrape_news.py --reprocess` (o scrape con fetch).
+5. Pipelines: `train_views_model.py` + `report_editorial_opportunities.py`.
+
+`notebooks/colab_train.ipynb` es solo **smoke test** (MLP sintético). No usa notas reales.
 
 ### Clonado tipico (repo publico)
 
 ```python
+%cd /content
 !git clone https://github.com/isaacgrimaldovo/shannon_model.git
 %cd shannon_model
 !pip install -q -r requirements.txt
 ```
 
-Para repos privados o secrets, ver `docs/COLABORACION.md`.
+Secrets / equipo: `docs/COLABORACION.md`.
 
 ## Trabajo en equipo
 
@@ -73,12 +82,9 @@ Docs: https://github.com/Fission-AI/OpenSpec
 
 ## Estado actual
 
-El pipeline corre con datos sinteticos y un MLP baseline para validar Colab + Git.
-
-Pendiente de definir:
-- Dataset real y ruta (Drive / URL / Kaggle)
-- Arquitectura final del modelo
-- Metricas y tracking de experimentos (W&B opcional)
+- Smoke Colab/local: MLP sintético (`scripts/train.py`).
+- Pipeline real: scrape/extract → `data/processed/notes_structured.parquet` + `data/raw/csv_urls/` → impacto vistas (SHAP) → reporte editorial (receta).
+- Datos y checkpoints: no versionados; en Colab usar Drive (`docs/COLAB.md`).
 
 ## Config
 

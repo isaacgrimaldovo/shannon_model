@@ -16,10 +16,15 @@
 ## Artefactos
 
 - Checkpoints: carpeta checkpoints/ (gitignored) o Google Drive.
+- Datos: `data/raw/` (html, csv_urls, scrape_index) y `data/processed/` (notes_structured.parquet) — gitignored.
 - Resultados de experimento: resume metricas y config en el PR.
+
+## Colab
+
+Pasos de clone, Drive, extract/scrape y trains reales: ver **`docs/COLAB.md`**.
 
 ## Convenciones
 
 - Codigo Python en src/shannon_model/.
-- Notebooks solo orquestan (setup + llamada a run_training).
+- Notebooks solo orquestan (setup + CLIs); la logica vive en src/scripts.
 - Cambios de hiperparametros en configs/ con un YAML nuevo.
