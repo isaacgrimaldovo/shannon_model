@@ -39,5 +39,13 @@ content_gbr_model:
     - {n_estimators: 200, max_depth: 3, learning_rate: 0.03, subsample: 0.8}
     - {n_estimators: 150, max_depth: 2, learning_rate: 0.1, subsample: 0.6}
 
+
+# Tono/polaridad (nlp-tone-polarity-features): modelo de sentiment pre-entrenado en español,
+# corre sobre cuerpo_texto. max_length trunca notas largas (RoBERTuito entrenado en texto corto).
+nlp_tone:
+  model_name: pysentimiento/robertuito-sentiment-analysis
+  cache_path: checkpoints/views_impact/nlp_tone_cache.parquet
+  max_length: 128
+
 output:
   dir: checkpoints/views_impact

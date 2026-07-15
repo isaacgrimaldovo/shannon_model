@@ -12,11 +12,13 @@ from sklearn.ensemble import RandomForestRegressor
 from shannon_model.impact_model.cv import grid_search_content_model, grid_search_cv
 from shannon_model.impact_model.dataset import (
     CONTENT_TARGET_COLUMN,
+    DEFAULT_NLP_CACHE_PATH,
     build_base_frame,
     build_content_frame,
     build_training_frame,
 )
 from shannon_model.impact_model.explain import build_impact_table, build_impact_table_by_category
+from shannon_model.impact_model.nlp_tone import DEFAULT_MODEL_NAME
 from shannon_model.impact_model.train import fit_final_model
 
 _CONTENT_NON_FEATURE_COLUMNS = ("url", "fecha_publicacion", CONTENT_TARGET_COLUMN)
@@ -33,12 +35,16 @@ class ImpactModelConfig:
     content_model_param_grid: list[dict[str, Any]] = field(default_factory=list)
     gbr_param_grid: list[dict[str, Any]] = field(default_factory=list)
     content_gbr_param_grid: list[dict[str, Any]] = field(default_factory=list)
+    nlp_cache_path: Path = Path(DEFAULT_NLP_CACHE_PATH)
+    nlp_model_name: str = DEFAULT_MODEL_NAME
 
 
 def run_pipeline(
     config: ImpactModelConfig, model_cls: type = RandomForestRegressor, artifact_suffix: str = ""
 ) -> dict[str, Any]:
-    base_df = build_base_frame(config.structured_path, config.csv_urls_dir)
+    base_df = build_base_frame(
+        config.structured_path, config.csv_urls_dir, config.nlp_cache_path, config.nlp_model_name
+    )
     if base_df.empty:
         raise ValueError("dataset de entrenamiento vacío: no hay notas scrapeadas con target válido")
 
@@ -47,7 +53,9 @@ def run_pipeline(
     )
     best_cv = max(cv_results, key=lambda r: r["r2_mean"])
 
-    training_frame = build_training_frame(config.structured_path, config.csv_urls_dir)
+    training_frame = build_training_frame(
+        config.structured_path, config.csv_urls_dir, config.nlp_cache_path, config.nlp_model_name
+    )
     model = fit_final_model(training_frame, config.seed, best_params, model_cls)
     feature_cols = [c for c in training_frame.columns if c != "log_views_proxy"]
     impact_table = build_impact_table(model, training_frame[feature_cols])
@@ -82,7 +90,9 @@ def run_content_only_pipeline(
     Dataset a nivel nota (no nota×source, ver `build_content_frame`). Conviven con el modelo A
     (`run_pipeline`) — no lo modifica ni reusa su dataset/CV, ambos tienen propósitos distintos.
     """
-    content_df = build_content_frame(config.structured_path, config.csv_urls_dir)
+    content_df = build_content_frame(
+        config.structured_path, config.csv_urls_dir, config.nlp_cache_path, config.nlp_model_name
+    )
     if content_df.empty:
         raise ValueError("dataset de entrenamiento (modelo B) vacío: no hay notas con target válido")
 

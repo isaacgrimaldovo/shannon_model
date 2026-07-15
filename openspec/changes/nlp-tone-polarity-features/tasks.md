@@ -12,20 +12,20 @@
 
 ## 3. Dependencia y módulo de scoring NLP
 
-- [ ] 3.1 Agregar `pysentimiento` a `requirements.txt`
-- [ ] 3.2 Nuevo módulo `src/shannon_model/impact_model/nlp_tone.py` con función `score_tone(texts: pd.Series) -> pd.DataFrame` que carga el analizador de sentiment (`pysentimiento.create_analyzer(task="sentiment", lang="es")`) una sola vez y devuelve por fila: `tono` (POS/NEG/NEU), `polaridad_score` (`P(POS) − P(NEG)`)
-- [ ] 3.3 Truncar `cuerpo_texto` al máximo de tokens soportado por el modelo antes de inferir (documentar el límite usado)
+- [x] 3.1 Agregar `pysentimiento` a `requirements.txt`
+- [x] 3.2 Nuevo módulo `src/shannon_model/impact_model/nlp_tone.py` con función `score_tone(texts: pd.Series) -> pd.DataFrame` que carga el analizador de sentiment (`pysentimiento.create_analyzer(task="sentiment", lang="es")`) una sola vez y devuelve por fila: `tono` (POS/NEG/NEU), `polaridad_score` (`P(POS) − P(NEG)`)
+- [x] 3.3 Truncar `cuerpo_texto` al máximo de tokens soportado por el modelo antes de inferir (documentar el límite usado) — el tokenizer de `robertuito-sentiment-analysis` trunca automáticamente a `model_max_length=128` (confirmado localmente), documentado en `nlp_tone.py` y `configs/views_impact.yaml::nlp_tone.max_length`
 
 ## 4. Cache de resultados NLP
 
-- [ ] 4.1 En `nlp_tone.py`, agregar `load_or_compute_tone(df: pd.DataFrame, cache_path: Path) -> pd.DataFrame`: lee `checkpoints/views_impact/nlp_tone_cache.parquet` si existe, calcula tono/polaridad solo para `nota_id` nuevos o con `cuerpo_texto` cambiado (hash simple), persiste el cache actualizado
-- [ ] 4.2 Agregar ruta de cache a `configs/views_impact.yaml` (sección nueva, ej. `nlp_tone.cache_path`, `nlp_tone.model_name`)
+- [x] 4.1 En `nlp_tone.py`, agregar `load_or_compute_tone(df: pd.DataFrame, cache_path: Path) -> pd.DataFrame`: lee `checkpoints/views_impact/nlp_tone_cache.parquet` si existe, calcula tono/polaridad solo para `nota_id` nuevos o con `cuerpo_texto` cambiado (hash simple), persiste el cache actualizado
+- [x] 4.2 Agregar ruta de cache a `configs/views_impact.yaml` (sección nueva, ej. `nlp_tone.cache_path`, `nlp_tone.model_name`)
 
 ## 5. Integrar features al dataset de impacto
 
-- [ ] 5.1 En `src/shannon_model/impact_model/dataset.py`, `build_base_frame` hace join de `cuerpo_texto` (desde `notes_structured.parquet`) con el resultado de `load_or_compute_tone`, agregando `polaridad_score` y one-hot `tono_POS`/`tono_NEG`/`tono_NEU` al frame
-- [ ] 5.2 Agregar `polaridad_score`, `tono_POS`, `tono_NEG`, `tono_NEU` a `FEATURE_COLUMNS`
-- [ ] 5.3 Notas con `cuerpo_texto` vacío (backfill fallido) se excluyen del dataset de entrenamiento (filtro explícito, no imputación)
+- [x] 5.1 En `src/shannon_model/impact_model/dataset.py`, `build_base_frame` (modelo A) y `build_content_frame` (modelo B) hacen join de `cuerpo_texto` (desde `notes_structured.parquet`) con el resultado de `load_or_compute_tone`, agregando `polaridad_score` y one-hot `tono_POS`/`tono_NEG`/`tono_NEU` al frame
+- [x] 5.2 `polaridad_score` agregado a `FEATURE_COLUMNS` (continuo, mismo trato que `num_palabras` etc). `tono_POS`/`tono_NEG`/`tono_NEU` se agregan como dummies dinámicos vía `pd.get_dummies`, mismo patrón que `categoria_*`/`source_*` (no literales en `FEATURE_COLUMNS`, que nunca lista dummies existentes tampoco)
+- [x] 5.3 Notas con `cuerpo_texto` vacío (backfill fallido) se excluyen del dataset de entrenamiento vía `dropna(subset=[..., "polaridad_score", ...])` — filtro explícito, no imputación
 
 ## 6. Verificación
 

@@ -16,3 +16,4 @@ pyarrow>=15.0.0
 
 # Views impact model
 shap>=0.45.0
+pysentimiento>=0.7.0

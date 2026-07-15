@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from shannon_model.impact_model.feature_kinds import ACTIONABLE_FEATURES
+from shannon_model.impact_model.nlp_tone import DEFAULT_MODEL_NAME, load_or_compute_tone
 from shannon_model.scraping.pipeline import load_structured
 
 FEATURE_COLUMNS = [
@@ -32,7 +33,13 @@ FEATURE_COLUMNS = [
     "num_parrafos",
     "tiene_subtitulos",
     "tiene_video_embed",
+    # Tono/polaridad (nlp-tone-polarity-features): polaridad_score es continuo, igual que el
+    # resto; el one-hot de `tono` (tono_POS/NEG/NEU) se agrega como dummy, mismo patrón que
+    # categoria_*/source_* (no listado acá, ver build_base_frame/build_content_frame).
+    "polaridad_score",
 ]
+
+DEFAULT_NLP_CACHE_PATH = "checkpoints/views_impact/nlp_tone_cache.parquet"
 
 TARGET_COLUMN = "log_views_proxy"
 # Target auxiliar a nivel nota (agregado sobre todas las fuentes), usado solo para
@@ -129,24 +136,35 @@ def apply_author_stats(df: pd.DataFrame, stats: dict[str, Any], leave_one_out: b
     return df
 
 
-def build_base_frame(structured_path: str | Path, csv_urls_dir: str | Path) -> pd.DataFrame:
+def build_base_frame(
+    structured_path: str | Path,
+    csv_urls_dir: str | Path,
+    nlp_cache_path: str | Path = DEFAULT_NLP_CACHE_PATH,
+    nlp_model_name: str = DEFAULT_MODEL_NAME,
+) -> pd.DataFrame:
     """Una fila por combinación nota×source (decisión 12 de design.md), con one-hot de categoria_nota y source.
     Target = views_7d real (decisión 14), solo para notas con esa ventana completamente observable.
 
     Mantiene `url`/`autor_nombre`/`AUTHOR_TARGET_COLUMN` (sin `autor_avg_views`/`autor_num_notas`
     todavía) para que el CV fold-safe pueda agrupar por `url` (GroupKFold) y ajustar las
     estadísticas de autor por fold en vez de sobre el dataset completo.
+
+    Notas sin `cuerpo_texto` (backfill de HTML pendiente o fallido) quedan con `polaridad_score`
+    nulo y se excluyen vía el `dropna` final — no se les imputa un tono/polaridad arbitrario.
     """
     structured = load_structured(Path(structured_path))
     structured["fecha_publicacion"] = pd.to_datetime(structured["fecha_publicacion"])
     source_targets, note_target = load_real_views_targets(csv_urls_dir)
+    tone = load_or_compute_tone(structured, nlp_cache_path, model_name=nlp_model_name)
 
     df = structured.merge(source_targets, on="url", how="inner")
     df = df.join(note_target, on="url")
+    df = df.merge(tone, on="nota_id", how="left")
 
     categoria_dummies = pd.get_dummies(df["categoria_nota"], prefix="categoria")
     source_dummies = pd.get_dummies(df["source"], prefix="source")
-    df = pd.concat([df, categoria_dummies, source_dummies], axis=1)
+    tono_dummies = pd.get_dummies(df["tono"], prefix="tono")
+    df = pd.concat([df, categoria_dummies, source_dummies, tono_dummies], axis=1)
 
     base_feature_cols = [c for c in FEATURE_COLUMNS if c not in ("autor_avg_views", "autor_num_notas")]
     keep_cols = (
@@ -154,14 +172,20 @@ def build_base_frame(structured_path: str | Path, csv_urls_dir: str | Path) -> p
         + base_feature_cols
         + list(categoria_dummies.columns)
         + list(source_dummies.columns)
+        + list(tono_dummies.columns)
     )
     df = df[keep_cols + [TARGET_COLUMN]].dropna(subset=base_feature_cols + [TARGET_COLUMN])
     return df.reset_index(drop=True)
 
 
-def build_training_frame(structured_path: str | Path, csv_urls_dir: str | Path) -> pd.DataFrame:
+def build_training_frame(
+    structured_path: str | Path,
+    csv_urls_dir: str | Path,
+    nlp_cache_path: str | Path = DEFAULT_NLP_CACHE_PATH,
+    nlp_model_name: str = DEFAULT_MODEL_NAME,
+) -> pd.DataFrame:
     """Dataset completo (nota×source) con autor LOO ajustado sobre el 100% — usado por el modelo final de SHAP."""
-    base = build_base_frame(structured_path, csv_urls_dir)
+    base = build_base_frame(structured_path, csv_urls_dir, nlp_cache_path, nlp_model_name)
     stats = fit_author_stats(base)
     df = apply_author_stats(base, stats, leave_one_out=True)
 
@@ -174,9 +198,17 @@ CONTENT_TARGET_COLUMN = "log_views_note"
 # por canal solo duplicaría features casi idénticas con distinto target — puro ruido, no señal.
 
 
-def build_content_frame(structured_path: str | Path, csv_urls_dir: str | Path) -> pd.DataFrame:
+def build_content_frame(
+    structured_path: str | Path,
+    csv_urls_dir: str | Path,
+    nlp_cache_path: str | Path = DEFAULT_NLP_CACHE_PATH,
+    nlp_model_name: str = DEFAULT_MODEL_NAME,
+) -> pd.DataFrame:
     """Dataset a nivel nota, solo con features accionables (`feature_kinds.ACTIONABLE_FEATURES`) +
-    `categoria_nota` one-hot — sin autor ni canal, para aislar la señal de contenido (modelo B).
+    `categoria_nota` one-hot, más `polaridad_score`/`tono_*` — sin autor ni canal, para aislar la
+    señal de contenido (modelo B). `polaridad_score`/`tono` no están en `ACTIONABLE_FEATURES`
+    (esa lista la consume `editorial_ops` para recetas, fuera de alcance de este change) — se
+    agregan acá directamente, no vía esa constante.
 
     Reusa el target por nota (`by_note`) que `load_real_views_targets` ya calcula internamente
     para las estadísticas de autor del modelo A — mismo valor, expuesto acá como target de
@@ -185,15 +217,22 @@ def build_content_frame(structured_path: str | Path, csv_urls_dir: str | Path) -
     structured = load_structured(Path(structured_path))
     structured["fecha_publicacion"] = pd.to_datetime(structured["fecha_publicacion"])
     _, note_target = load_real_views_targets(csv_urls_dir)
+    tone = load_or_compute_tone(structured, nlp_cache_path, model_name=nlp_model_name)
 
     df = structured.join(note_target.rename(CONTENT_TARGET_COLUMN), on="url", how="inner")
+    df = df.merge(tone, on="nota_id", how="left")
 
     categoria_dummies = pd.get_dummies(df["categoria_nota"], prefix="categoria")
-    df = pd.concat([df, categoria_dummies], axis=1)
+    tono_dummies = pd.get_dummies(df["tono"], prefix="tono")
+    df = pd.concat([df, categoria_dummies, tono_dummies], axis=1)
 
-    actionable_cols = list(ACTIONABLE_FEATURES)
+    actionable_cols = list(ACTIONABLE_FEATURES) + ["polaridad_score"]
     keep_cols = (
-        ["url", "fecha_publicacion"] + actionable_cols + list(categoria_dummies.columns) + [CONTENT_TARGET_COLUMN]
+        ["url", "fecha_publicacion"]
+        + actionable_cols
+        + list(categoria_dummies.columns)
+        + list(tono_dummies.columns)
+        + [CONTENT_TARGET_COLUMN]
     )
     df = df[keep_cols].dropna(subset=actionable_cols + [CONTENT_TARGET_COLUMN])
     return df.reset_index(drop=True)

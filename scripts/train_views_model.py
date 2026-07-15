@@ -62,6 +62,8 @@ def main() -> None:
         content_model_param_grid=cfg["content_model"]["param_grid"],
         gbr_param_grid=cfg["gbr_model"]["param_grid"],
         content_gbr_param_grid=cfg["content_gbr_model"]["param_grid"],
+        nlp_cache_path=Path(cfg["nlp_tone"]["cache_path"]),
+        nlp_model_name=cfg["nlp_tone"]["model_name"],
     )
 
     result_rf_a = run_pipeline(config)
