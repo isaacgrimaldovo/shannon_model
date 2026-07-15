@@ -10,6 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from sklearn.ensemble import GradientBoostingRegressor  # noqa: E402
+
 from shannon_model.config import load_config  # noqa: E402
 from shannon_model.impact_model.pipeline import (  # noqa: E402
     ImpactModelConfig,
@@ -58,13 +60,36 @@ def main() -> None:
         n_splits=int(cfg["cv"]["n_splits"]),
         param_grid=cfg["cv"]["param_grid"],
         content_model_param_grid=cfg["content_model"]["param_grid"],
+        gbr_param_grid=cfg["gbr_model"]["param_grid"],
+        content_gbr_param_grid=cfg["content_gbr_model"]["param_grid"],
     )
 
-    result_a = run_pipeline(config)
-    _print_result("MODELO A — features completas (autor + canal + contenido)", result_a)
+    result_rf_a = run_pipeline(config)
+    _print_result("MODELO A — RandomForest (autor + canal + contenido)", result_rf_a)
 
-    result_b = run_content_only_pipeline(config)
-    _print_result("MODELO B — solo features accionables (sin autor/canal)", result_b)
+    result_rf_b = run_content_only_pipeline(config)
+    _print_result("MODELO B — RandomForest (solo features accionables)", result_rf_b)
+
+    result_gbr_a = run_pipeline(config, model_cls=GradientBoostingRegressor, artifact_suffix="_gbr")
+    _print_result("MODELO A — GradientBoosting (autor + canal + contenido)", result_gbr_a)
+
+    result_gbr_b = run_content_only_pipeline(
+        config, model_cls=GradientBoostingRegressor, artifact_suffix="_gbr"
+    )
+    _print_result("MODELO B — GradientBoosting (solo features accionables)", result_gbr_b)
+
+    print(f"\n{'=' * 60}\nCOMPARACIÓN R² POR ALGORITMO×MODELO\n{'=' * 60}")
+    for label, result in (
+        ("RandomForest — modelo A", result_rf_a),
+        ("RandomForest — modelo B", result_rf_b),
+        ("GradientBoosting — modelo A", result_gbr_a),
+        ("GradientBoosting — modelo B", result_gbr_b),
+    ):
+        r2 = result["best_cv"]
+        print(
+            f"  {label:<28} r2={r2['r2_mean']:.4f}±{r2['r2_std']:.4f} "
+            f"mae_log={r2['mae_mean']:.4f}±{r2['mae_std']:.4f}"
+        )
 
 
 if __name__ == "__main__":

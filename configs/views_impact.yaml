@@ -22,5 +22,22 @@ content_model:
     - {n_estimators: 200, max_depth: 8, min_samples_leaf: 5}
     - {n_estimators: 300, max_depth: 4, min_samples_leaf: 15}
 
+# GradientBoostingRegressor sobre modelo A (compare-gbr-vs-random-forest): mismo dataset/features
+# que cv.param_grid, grid propio (learning_rate/subsample no aplican a RandomForest).
+gbr_model:
+  param_grid:
+    - {n_estimators: 200, max_depth: 3, learning_rate: 0.05, subsample: 0.8}
+    - {n_estimators: 300, max_depth: 3, learning_rate: 0.03, subsample: 0.8}
+    - {n_estimators: 200, max_depth: 4, learning_rate: 0.05, subsample: 0.6}
+    - {n_estimators: 100, max_depth: 3, learning_rate: 0.1, subsample: 1.0}
+
+# GradientBoostingRegressor sobre modelo B (dataset a nivel nota, más chico) — grid conservador,
+# mismo criterio que content_model.param_grid.
+content_gbr_model:
+  param_grid:
+    - {n_estimators: 100, max_depth: 2, learning_rate: 0.05, subsample: 0.8}
+    - {n_estimators: 200, max_depth: 3, learning_rate: 0.03, subsample: 0.8}
+    - {n_estimators: 150, max_depth: 2, learning_rate: 0.1, subsample: 0.6}
+
 output:
   dir: checkpoints/views_impact

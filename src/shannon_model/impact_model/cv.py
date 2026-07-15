@@ -22,7 +22,11 @@ _CONTENT_EXCLUDE_FROM_FEATURES = ("url", "fecha_publicacion", CONTENT_TARGET_COL
 
 
 def cross_validate(
-    base_df: pd.DataFrame, seed: int, n_splits: int, model_params: dict[str, Any]
+    base_df: pd.DataFrame,
+    seed: int,
+    n_splits: int,
+    model_params: dict[str, Any],
+    model_cls: type = RandomForestRegressor,
 ) -> dict[str, Any]:
     """CV temporal (decisión 15 de design.md): ordena notas únicas por `fecha_publicacion` y aplica
     `TimeSeriesSplit` (ventana expansiva) sobre esa secuencia de urls, no sobre filas sueltas — todas
@@ -45,7 +49,7 @@ def cross_validate(
         val_feat = apply_author_stats(val_df, stats, leave_one_out=False)
 
         feature_cols = [c for c in train_feat.columns if c not in _EXCLUDE_FROM_FEATURES]
-        model = RandomForestRegressor(random_state=seed, **model_params)
+        model = model_cls(random_state=seed, **model_params)
         model.fit(train_feat[feature_cols], train_feat[TARGET_COLUMN])
 
         pred = model.predict(val_feat[feature_cols])
@@ -62,18 +66,27 @@ def cross_validate(
 
 
 def grid_search_cv(
-    base_df: pd.DataFrame, seed: int, n_splits: int, param_grid: list[dict[str, Any]]
+    base_df: pd.DataFrame,
+    seed: int,
+    n_splits: int,
+    param_grid: list[dict[str, Any]],
+    model_cls: type = RandomForestRegressor,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Evalúa cada combinación de hiperparámetros sobre el mismo esquema de CV fold-safe."""
     results = [
-        {"params": params, **cross_validate(base_df, seed, n_splits, params)} for params in param_grid
+        {"params": params, **cross_validate(base_df, seed, n_splits, params, model_cls)}
+        for params in param_grid
     ]
     best = max(results, key=lambda r: r["r2_mean"])
     return best["params"], results
 
 
 def cross_validate_content_model(
-    content_df: pd.DataFrame, seed: int, n_splits: int, model_params: dict[str, Any]
+    content_df: pd.DataFrame,
+    seed: int,
+    n_splits: int,
+    model_params: dict[str, Any],
+    model_cls: type = RandomForestRegressor,
 ) -> dict[str, Any]:
     """CV temporal para el modelo B (solo features accionables, sin autor/canal).
 
@@ -92,7 +105,7 @@ def cross_validate_content_model(
         train_df = ordered.iloc[train_idx]
         val_df = ordered.iloc[val_idx]
 
-        model = RandomForestRegressor(random_state=seed, **model_params)
+        model = model_cls(random_state=seed, **model_params)
         model.fit(train_df[feature_cols], train_df[CONTENT_TARGET_COLUMN])
 
         pred = model.predict(val_df[feature_cols])
@@ -109,11 +122,18 @@ def cross_validate_content_model(
 
 
 def grid_search_content_model(
-    content_df: pd.DataFrame, seed: int, n_splits: int, param_grid: list[dict[str, Any]]
+    content_df: pd.DataFrame,
+    seed: int,
+    n_splits: int,
+    param_grid: list[dict[str, Any]],
+    model_cls: type = RandomForestRegressor,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Evalúa cada combinación de hiperparámetros del modelo B sobre el mismo esquema de CV temporal."""
     results = [
-        {"params": params, **cross_validate_content_model(content_df, seed, n_splits, params)}
+        {
+            "params": params,
+            **cross_validate_content_model(content_df, seed, n_splits, params, model_cls),
+        }
         for params in param_grid
     ]
     best = max(results, key=lambda r: r["r2_mean"])

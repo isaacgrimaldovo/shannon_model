@@ -15,8 +15,10 @@ from sklearn.ensemble import RandomForestRegressor
 from shannon_model.impact_model.dataset import TARGET_COLUMN
 
 
-def fit_final_model(df: pd.DataFrame, seed: int, model_params: dict[str, Any]) -> RandomForestRegressor:
+def fit_final_model(
+    df: pd.DataFrame, seed: int, model_params: dict[str, Any], model_cls: type = RandomForestRegressor
+) -> Any:
     feature_cols = [c for c in df.columns if c != TARGET_COLUMN]
-    model = RandomForestRegressor(random_state=seed, **model_params)
+    model = model_cls(random_state=seed, **model_params)
     model.fit(df[feature_cols], df[TARGET_COLUMN])
     return model

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -10,6 +11,11 @@ from pathlib import Path
 import pandas as pd
 import requests
 from tqdm import tqdm
+
+# Category slug after strip("/"): e.g. deportes, estilo-de-vida.
+# Rejects broken CSV rows that put a path/slug remnant into `folder`
+# (e.g. "deportejuegue-hoy-844907.html").
+_FOLDER_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 from shannon_model.scraping.extract import NoNewsArticleError, extract_note_fields
 from shannon_model.scraping.fetch import RateLimiter, fetch_html
@@ -78,24 +84,36 @@ def load_url_folder_map(urls_xlsx: Path) -> dict[str, str]:
     return dict(zip(df["url"], df["folder"]))
 
 
+def _is_valid_folder_slug(folder: object) -> bool:
+    """True if `folder` looks like a section slug, not a broken CSV remnant."""
+    if not isinstance(folder, str) or not folder:
+        return False
+    return _FOLDER_SLUG_RE.fullmatch(folder.lower()) is not None
+
+
 def load_url_folder_map_from_csv_urls(csv_urls_dir: Path) -> dict[str, str]:
     """Deriva `url -> folder` desde `data/raw/csv_urls/` (mismo esquema que el xlsx viejo,
     pero con más URLs y categorías). Excluye los mismos archivos "raros" que
-    `impact_model.dataset._load_daily_views` (formato viejo / duplicado del proxy)."""
+    `impact_model.dataset._load_daily_views` (formato viejo / duplicado del proxy).
+
+    Drops rows whose `folder` is not a category slug (malformed exports that splice
+    path fragments into that column). Still raises if a URL keeps two *valid* folders.
+    """
     csv_dir = Path(csv_urls_dir)
     files = [
         f for f in csv_dir.glob("*.csv") if "report" not in f.name and f.name != "ehm-90-google-economia.csv"
     ]
     frames = [pd.read_csv(f, usecols=["url", "folder"]) for f in files]
     df = pd.concat(frames, ignore_index=True).dropna(subset=["url"])
-    df["folder"] = df["folder"].str.strip("/")
+    df["folder"] = df["folder"].astype("string").str.strip("/")
+    df = df[df["folder"].map(_is_valid_folder_slug)]
 
     dedup = df.drop_duplicates(subset=["url", "folder"])
     counts = dedup.groupby("url").size()
     conflicts = counts[counts > 1]
     if not conflicts.empty:
         conflicting_url = conflicts.index[0]
-        values = sorted(dedup.loc[dedup["url"] == conflicting_url, "folder"])
+        values = sorted(dedup.loc[dedup["url"] == conflicting_url, "folder"].tolist())
         raise ValueError(f"folder inconsistente para url={conflicting_url!r}: {values}")
 
     return dict(zip(dedup["url"], dedup["folder"]))
