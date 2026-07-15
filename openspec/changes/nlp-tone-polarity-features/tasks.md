@@ -1,13 +1,13 @@
 ## 1. Persistir cuerpo del texto en el scraper
 
-- [ ] 1.1 En `src/shannon_model/scraping/extract.py`, `body_stats()` retorna también `cuerpo_texto` (el mismo `text` ya calculado, sin cambiar ninguna de las señales existentes)
-- [ ] 1.2 Agregar `cuerpo_texto` a `STRUCTURED_COLUMNS` en `src/shannon_model/scraping/pipeline.py`
+- [x] 1.1 En `src/shannon_model/scraping/extract.py`, `body_stats()` retorna también `cuerpo_texto` (el mismo `text` ya calculado, sin cambiar ninguna de las señales existentes)
+- [x] 1.2 Agregar `cuerpo_texto` a `STRUCTURED_COLUMNS` en `src/shannon_model/scraping/pipeline.py`
 
 ## 2. Backfill de HTML faltante
 
-- [ ] 2.1 En `src/shannon_model/scraping/pipeline.py`, agregar `backfill_missing_html(config: ScrapeConfig) -> dict[str, int]`: itera filas `status=ok` del índice, si `html_path` no existe en disco re-descarga (mismo `RateLimiter`/`fetch_html`/reintentos que `run_scrape`) y re-extrae con `extract_note_fields`; si `html_path` sí existe, reprocesa desde disco (mismo criterio que `reprocess_existing`)
-- [ ] 2.2 Actualizar `notes_structured.parquet` por nota backfillada (misma lógica de `drop_duplicates(subset="nota_id", keep="last")` que ya usa `run_scrape`/`reprocess_existing`)
-- [ ] 2.3 Agregar flag `--backfill-html` a `scripts/scrape_news.py` que llama a `backfill_missing_html`
+- [x] 2.1 En `src/shannon_model/scraping/pipeline.py`, agregar `backfill_missing_html(config: ScrapeConfig) -> dict[str, int]`: itera filas `status=ok` del índice, si `html_path` no existe en disco re-descarga (mismo `RateLimiter`/`fetch_html`/reintentos que `run_scrape`) y re-extrae con `extract_note_fields`; si `html_path` sí existe, reprocesa desde disco (mismo criterio que `reprocess_existing`)
+- [x] 2.2 Actualizar `notes_structured.parquet` por nota backfillada (misma lógica de `drop_duplicates(subset="nota_id", keep="last")` que ya usa `run_scrape`/`reprocess_existing`)
+- [x] 2.3 Agregar flag `--backfill-html` a `scripts/scrape_news.py` que llama a `backfill_missing_html`
 - [ ] 2.4 Correr el backfill sobre las 3,411 URLs reales y confirmar cuántas quedaron con `cuerpo_texto` no vacío vs. cuántas fallaron (documentar el conteo en el resumen de la corrida)
 
 ## 3. Dependencia y módulo de scoring NLP

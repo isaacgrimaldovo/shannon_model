@@ -69,7 +69,7 @@ def title_signals(titulo: str) -> dict[str, int]:
     }
 
 
-def body_stats(html: str) -> dict[str, int]:
+def body_stats(html: str) -> dict[str, Any]:
     """Señales del cuerpo (`div.texto-noticia`), no del JSON-LD."""
     soup = BeautifulSoup(html, "html.parser")
     body = soup.find(attrs={"itemprop": "articleBody"}) or soup.find("div", class_="texto-noticia")
@@ -81,6 +81,7 @@ def body_stats(html: str) -> dict[str, int]:
             "num_parrafos": 0,
             "tiene_subtitulos": 0,
             "tiene_video_embed": 0,
+            "cuerpo_texto": "",
         }
 
     text = body.get_text(separator=" ", strip=True)
@@ -99,6 +100,7 @@ def body_stats(html: str) -> dict[str, int]:
         "num_parrafos": len(body.find_all("p")),
         "tiene_subtitulos": int(bool(body.find(["h2", "h3"]))),
         "tiene_video_embed": tiene_video_embed,
+        "cuerpo_texto": text,
     }
 
 

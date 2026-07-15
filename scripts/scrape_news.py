@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from shannon_model.scraping.pipeline import (  # noqa: E402
     ScrapeConfig,
+    backfill_missing_html,
     reprocess_existing,
     run_scrape,
 )
@@ -43,6 +44,14 @@ def main() -> None:
         action="store_true",
         help="Re-extraer campos desde el HTML ya guardado, sin re-fetch al sitio",
     )
+    parser.add_argument(
+        "--backfill-html",
+        action="store_true",
+        help=(
+            "Para URLs ya 'ok': re-descarga el HTML si ya no está en disco "
+            "(ej. para recuperar cuerpo_texto en notas viejas), o reprocesa desde disco si sigue estando"
+        ),
+    )
     args = parser.parse_args()
 
     config = ScrapeConfig(
@@ -57,7 +66,10 @@ def main() -> None:
         workers=args.workers,
         max_attempts=args.max_attempts,
     )
-    if args.reprocess:
+    if args.backfill_html:
+        result = backfill_missing_html(config)
+        print("Backfill terminado:", result)
+    elif args.reprocess:
         result = reprocess_existing(config)
         print("Reprocesamiento terminado:", result)
     else:

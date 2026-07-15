@@ -60,6 +60,7 @@ STRUCTURED_COLUMNS = [
     "num_parrafos",
     "tiene_subtitulos",
     "tiene_video_embed",
+    "cuerpo_texto",
 ]
 
 
@@ -273,6 +274,161 @@ def run_scrape(config: ScrapeConfig) -> dict[str, int]:
         "processed": len(to_process),
         "ok": ok_count,
         "error": error_count,
+    }
+
+
+def _backfill_one(
+    url: str,
+    nota_id: str,
+    html_path: Path,
+    url_folder: dict[str, str],
+    config: ScrapeConfig,
+    session: requests.Session,
+    thread_limiters: threading.local,
+) -> dict:
+    """Corre en un worker: si `html_path` ya existe, reprocesa desde disco (sin red);
+    si no, re-descarga (mismo `RateLimiter`/reintentos que `_fetch_and_extract`)."""
+    if html_path.exists():
+        html = html_path.read_text(encoding="utf-8")
+        http_status = None
+    else:
+        if not hasattr(thread_limiters, "limiter"):
+            thread_limiters.limiter = RateLimiter(config.delay)
+        limiter = thread_limiters.limiter
+
+        result = fetch_html(url, session, limiter, timeout=config.timeout, max_retries=config.max_retries)
+        if not result.ok:
+            return {
+                "url": url,
+                "nota_id": nota_id,
+                "ok": False,
+                "fetch_failed": True,
+                "http_status": result.http_status,
+                "error_msg": result.error_msg,
+                "html_path": str(html_path),
+            }
+        html_path.parent.mkdir(parents=True, exist_ok=True)
+        html_path.write_text(result.html, encoding="utf-8")
+        html = result.html
+        http_status = result.http_status
+
+    try:
+        fields = extract_note_fields(html, url, categoria_nota=url_folder.get(url, ""))
+    except NoNewsArticleError as exc:
+        # Falla de parseo, no de red/disco: la URL sigue siendo alcanzable (o el HTML
+        # en disco es válido), así que no se marca como error en el índice — mismo
+        # criterio conservador que `reprocess_existing` (skip silencioso).
+        return {
+            "url": url,
+            "nota_id": nota_id,
+            "ok": False,
+            "fetch_failed": False,
+            "http_status": http_status,
+            "error_msg": str(exc),
+            "html_path": str(html_path),
+        }
+
+    fields["nota_id"] = nota_id
+    return {
+        "url": url,
+        "nota_id": nota_id,
+        "ok": True,
+        "http_status": http_status,
+        "html_path": str(html_path),
+        "fields": fields,
+    }
+
+
+def backfill_missing_html(config: ScrapeConfig) -> dict[str, int]:
+    """Para URLs con `status=ok` en el índice: re-descarga el HTML si `html_path` ya no
+    existe en disco (reusando `RateLimiter`/reintentos), o reprocesa desde disco si sí existe.
+    En ambos casos re-extrae campos (incluyendo `cuerpo_texto`, ausente en corridas viejas) y
+    actualiza `notes_structured.parquet`. No toca URLs con `status` distinto de `ok`."""
+    url_folder = _load_url_folder_map(config.urls_xlsx)
+    index_df = load_index(config.index_path)
+    structured_df = load_structured(config.structured_path)
+
+    ok_rows = index_df[index_df["status"] == "ok"]
+
+    session = requests.Session()
+    thread_limiters = threading.local()
+
+    refetched = 0
+    reprocessed_from_disk = 0
+    error_count = 0
+    skipped = 0
+
+    with ThreadPoolExecutor(max_workers=max(1, config.workers)) as executor:
+        futures = {
+            executor.submit(
+                _backfill_one,
+                row["url"],
+                row["nota_id"],
+                Path(row["html_path"]),
+                url_folder,
+                config,
+                session,
+                thread_limiters,
+            ): row["nota_id"]
+            for _, row in ok_rows.iterrows()
+        }
+
+        for future in tqdm(as_completed(futures), total=len(futures), desc="backfill"):
+            outcome = future.result()
+            # `http_status is None` significa que `_backfill_one` leyó del disco en vez de
+            # re-descargar (ver `_backfill_one`) — a esta altura `html_path` ya existe en
+            # ambos casos, así que no sirve para distinguir fetch de disco.
+            read_from_disk = outcome["ok"] and outcome["http_status"] is None
+
+            if not outcome["ok"]:
+                if outcome["fetch_failed"]:
+                    index_df = record_error(
+                        index_df,
+                        outcome["url"],
+                        outcome["nota_id"],
+                        outcome["http_status"],
+                        outcome["error_msg"],
+                        outcome["html_path"],
+                        config.max_attempts,
+                    )
+                    error_count += 1
+                    save_index(index_df, config.index_path)
+                else:
+                    skipped += 1
+                continue
+
+            structured_df = pd.concat(
+                [structured_df, pd.DataFrame([outcome["fields"]], columns=STRUCTURED_COLUMNS)],
+                ignore_index=True,
+            ).drop_duplicates(subset="nota_id", keep="last")
+
+            if read_from_disk:
+                reprocessed_from_disk += 1
+            else:
+                refetched += 1
+                index_df = upsert_record(
+                    index_df,
+                    {
+                        "url": outcome["url"],
+                        "nota_id": outcome["nota_id"],
+                        "status": "ok",
+                        "http_status": outcome["http_status"],
+                        "error_msg": "",
+                        "scraped_at": now_iso(),
+                        "html_path": outcome["html_path"],
+                    },
+                )
+                save_index(index_df, config.index_path)
+            # Guardar tras cada nota: mismo criterio que run_scrape, si la corrida
+            # se interrumpe no se pierde el trabajo ya hecho.
+            save_structured(structured_df, config.structured_path)
+
+    return {
+        "total_ok": len(ok_rows),
+        "refetched": refetched,
+        "reprocessed_from_disk": reprocessed_from_disk,
+        "error": error_count,
+        "skipped": skipped,
     }
 
 
