@@ -154,6 +154,7 @@ def apply_author_stats(df: pd.DataFrame, stats: dict[str, Any], leave_one_out: b
     return df
 
 
+@lru_cache(maxsize=4)
 def build_base_frame(
     structured_path: str | Path,
     csv_urls_dir: str | Path,
@@ -166,6 +167,11 @@ def build_base_frame(
     Mantiene `url`/`autor_nombre`/`AUTHOR_TARGET_COLUMN` (sin `autor_avg_views`/`autor_num_notas`
     todavía) para que el CV fold-safe pueda agrupar por `url` (GroupKFold) y ajustar las
     estadísticas de autor por fold en vez de sobre el dataset completo.
+
+    Cacheado en memoria (función pura de sus argumentos): `run_pipeline` llama esto una vez para
+    el grid search y otra vez dentro de `build_training_frame` para el fit final — mismo resultado
+    ambas veces. Ningún caller muta el DataFrame in-place (`cross_validate`/`apply_author_stats`
+    usan `.copy()`/indexado booleano), así que compartir el objeto cacheado es seguro.
 
     Notas sin `cuerpo_texto` (backfill de HTML pendiente o fallido) quedan con `polaridad_score`
     nulo y se excluyen vía el `dropna` final — no se les imputa un tono/polaridad arbitrario.
@@ -216,6 +222,7 @@ CONTENT_TARGET_COLUMN = "log_views_note"
 # por canal solo duplicaría features casi idénticas con distinto target — puro ruido, no señal.
 
 
+@lru_cache(maxsize=4)
 def build_content_frame(
     structured_path: str | Path,
     csv_urls_dir: str | Path,
@@ -227,6 +234,10 @@ def build_content_frame(
     señal de contenido (modelo B). `polaridad_score`/`tono` no están en `ACTIONABLE_FEATURES`
     (esa lista la consume `editorial_ops` para recetas, fuera de alcance de este change) — se
     agregan acá directamente, no vía esa constante.
+
+    Cacheado en memoria, mismo criterio que `build_base_frame`: `run_content_only_pipeline` se
+    llama 2 veces por corrida (RF-B, GBR-B) con el mismo dataset — sin cache, cada llamada
+    recalcularía el join/dummies desde cero.
 
     Reusa el target por nota (`by_note`) que `load_real_views_targets` ya calcula internamente
     para las estadísticas de autor del modelo A — mismo valor, expuesto acá como target de

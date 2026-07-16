@@ -49,6 +49,14 @@ def _print_result(label: str, result: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Entrenar modelos de impacto en vistas (A: completo, B: solo contenido)")
     parser.add_argument("--config", default="configs/views_impact.yaml")
+    parser.add_argument(
+        "--skip-gbr",
+        action="store_true",
+        help=(
+            "No correr las variantes GradientBoosting (ya descartadas en compare-gbr-vs-random-forest: "
+            "pierden contra RandomForest en modelo A y B) — corta ~40-50% del tiempo de esta corrida"
+        ),
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -72,21 +80,29 @@ def main() -> None:
     result_rf_b = run_content_only_pipeline(config)
     _print_result("MODELO B — RandomForest (solo features accionables)", result_rf_b)
 
-    result_gbr_a = run_pipeline(config, model_cls=GradientBoostingRegressor, artifact_suffix="_gbr")
-    _print_result("MODELO A — GradientBoosting (autor + canal + contenido)", result_gbr_a)
-
-    result_gbr_b = run_content_only_pipeline(
-        config, model_cls=GradientBoostingRegressor, artifact_suffix="_gbr"
-    )
-    _print_result("MODELO B — GradientBoosting (solo features accionables)", result_gbr_b)
-
-    print(f"\n{'=' * 60}\nCOMPARACIÓN R² POR ALGORITMO×MODELO\n{'=' * 60}")
-    for label, result in (
+    comparison = [
         ("RandomForest — modelo A", result_rf_a),
         ("RandomForest — modelo B", result_rf_b),
-        ("GradientBoosting — modelo A", result_gbr_a),
-        ("GradientBoosting — modelo B", result_gbr_b),
-    ):
+    ]
+
+    if not args.skip_gbr:
+        result_gbr_a = run_pipeline(config, model_cls=GradientBoostingRegressor, artifact_suffix="_gbr")
+        _print_result("MODELO A — GradientBoosting (autor + canal + contenido)", result_gbr_a)
+
+        result_gbr_b = run_content_only_pipeline(
+            config, model_cls=GradientBoostingRegressor, artifact_suffix="_gbr"
+        )
+        _print_result("MODELO B — GradientBoosting (solo features accionables)", result_gbr_b)
+
+        comparison += [
+            ("GradientBoosting — modelo A", result_gbr_a),
+            ("GradientBoosting — modelo B", result_gbr_b),
+        ]
+
+    print(f"\n{'=' * 60}\nCOMPARACIÓN R² POR ALGORITMO×MODELO\n{'=' * 60}")
+    if args.skip_gbr:
+        print("  (--skip-gbr: variantes GradientBoosting no corrieron esta vez)")
+    for label, result in comparison:
         r2 = result["best_cv"]
         print(
             f"  {label:<28} r2={r2['r2_mean']:.4f}±{r2['r2_std']:.4f} "
