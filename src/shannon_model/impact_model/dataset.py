@@ -58,11 +58,19 @@ def _load_daily_views(csv_urls_dir: str | Path) -> pd.DataFrame:
     files = [
         f for f in csv_dir.glob("*.csv") if "report" not in f.name and f.name != "ehm-90-google-economia.csv"
     ]
-    frames = [pd.read_csv(f, usecols=["url", "source", "publishDate", "date", "pageViewsTotal"]) for f in files]
+    frames = [
+        pd.read_csv(
+            f,
+            usecols=["url", "source", "publishDate", "date", "pageViewsTotal"],
+            low_memory=False,
+        )
+        for f in files
+    ]
     all_df = pd.concat(frames, ignore_index=True)
     all_df = all_df[all_df["date"] != "Total"]
-    all_df["date"] = pd.to_datetime(all_df["date"])
+    all_df["date"] = pd.to_datetime(all_df["date"], errors="coerce")
     all_df["publishDate"] = pd.to_datetime(all_df["publishDate"], errors="coerce")
+    all_df = all_df.dropna(subset=["date", "url"])
     return all_df
 
 
