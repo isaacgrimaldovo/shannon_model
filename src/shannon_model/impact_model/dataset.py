@@ -70,7 +70,8 @@ def _load_daily_views(csv_urls_dir: str | Path) -> pd.DataFrame:
     all_df = all_df[all_df["date"] != "Total"]
     all_df["date"] = pd.to_datetime(all_df["date"], errors="coerce")
     all_df["publishDate"] = pd.to_datetime(all_df["publishDate"], errors="coerce")
-    all_df = all_df.dropna(subset=["date", "url"])
+    all_df["pageViewsTotal"] = pd.to_numeric(all_df["pageViewsTotal"], errors="coerce")
+    all_df = all_df.dropna(subset=["date", "url", "pageViewsTotal"])
     return all_df
 
 
