@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -86,9 +87,17 @@ def _views_in_publish_window(daily: pd.DataFrame) -> pd.DataFrame:
     return sub[(sub["date"] >= sub["_pub"]) & (sub["date"] < sub["_pub"] + pd.Timedelta(days=7))]
 
 
+@lru_cache(maxsize=4)
 def load_real_views_targets(csv_urls_dir: str | Path) -> tuple[pd.DataFrame, pd.Series]:
     """views_7d real: por combinación (url, source) para el target de entrenamiento, y por nota
-    (sumando todas las fuentes) para las estadísticas de autor. Una sola pasada sobre los CSVs."""
+    (sumando todas las fuentes) para las estadísticas de autor. Una sola pasada sobre los CSVs.
+
+    Cacheado en memoria: función pura de `csv_urls_dir` (mismo directorio -> mismo resultado).
+    `train_views_model.py` llama esto 6-8 veces por corrida completa (RF-A/B, GBR-A/B, cada uno
+    reconstruyendo su dataset) — sin cache, cada llamada re-parsea todos los CSVs de `csv_urls_dir`
+    desde cero. Callers no mutan el resultado in-place (solo `.merge()`/`.join()`/`.rename()`),
+    así que compartir el mismo objeto cacheado entre llamadas es seguro.
+    """
     daily = _load_daily_views(csv_urls_dir)
     in_window = _views_in_publish_window(daily)
 
